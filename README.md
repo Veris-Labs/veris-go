@@ -1,12 +1,12 @@
 <p align="center">
   <img src="./assets/verislabs.ico" width="75" height="75" alt="Veris Labs Logo" align="middle" />
-  <img height="50" width="220" src="https://readme-typing-svg.herokuapp.com?font=Inter&weight=700&size=36&color=FFFFFF&center=true&vCenter=true&width=220&lines=verislabs.io&repeat=false&duration=2500" align="middle" />
+  <img height="50" src="https://readme-typing-svg.herokuapp.com?font=Inter&weight=700&size=36&color=FFFFFF&center=true&vCenter=true&width=220&lines=verislabs.io&repeat=false&duration=2500" align="middle" />
 </p>
 
 <p align="center">
 Official <b>Golang SDK</b> for Veris Labs.<br>
 It provides a convenient way to interact with the Veris Labs API and perform various operations.<br>
-For more information, navigate to <a href="https://docs.verislabs.com">docs.verislabs.com</a>.
+For more information, navigate to <a href="https://docs.verislabs.io">docs.verislabs.io</a>.
 </p>
 
 # Install
