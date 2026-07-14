@@ -6,7 +6,14 @@
 <p align="center">
 Official <b>Golang SDK</b> for Veris Labs.<br>
 It provides a convenient way to interact with the Veris Labs API and perform various operations.<br>
-For more information, navigate to <a href="https://docs.verislabs.io">docs.verislabs.io</a>.
+For more information, navigate to <a href="https://docs.verislabs.io">docs.verislabs.io</a>.<br><br>
+<b>This SDK is not yet in stable phase and follows v0.x.y versioning scheme.</b>
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/rhz5xcs5zK">
+    <img src="https://dcbadge.limes.pink/api/server/https://discord.gg/rhz5xcs5zK" alt="Discord" />
+  </a>
 </p>
 
 # Install
