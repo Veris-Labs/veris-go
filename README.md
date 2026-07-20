@@ -19,7 +19,7 @@ For more information, navigate to <a href="https://docs.verislabs.io">docs.veris
 # Install
 
 Simply run the following command to install the SDK:\
-`go get github.com/verislabs/veris-go`
+`go get github.com/veris-labs/veris-go`
 
 # Usage
 
