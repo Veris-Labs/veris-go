@@ -2,29 +2,77 @@ package veris
 
 import (
 	"context"
+	"encoding/base64"
+	"html"
 	"regexp"
-	"strings"
 	"sync"
 )
 
 var (
-	akamaiWebV3ScriptPathRegex = regexp.MustCompile(`type="text\/javascript"\s+src="([A-Za-z0-9/\-_]+)">`)
+	akamaiWebV3ScriptPathRegex   = regexp.MustCompile(`type="text/javascript"\s+src="([A-Za-z0-9/_-]+)">`)
+	akamaiWebSbsdScriptPathRegex = regexp.MustCompile(`src="((?:\/[A-Za-z0-9_-]+){5,}\?v=[a-z0-9-;&=]+)"`)
 )
 
 // Origin is for example "https://www.example.com"
-func ExtractAkamaiWebV3ScriptURL(origin, body string) (string, bool) {
-	matches := akamaiWebV3ScriptPathRegex.FindStringSubmatch(body)
-	if len(matches) < 2 {
+func ExtractAkamaiWebV3URL(origin, body string) (string, bool) {
+	match := akamaiWebV3ScriptPathRegex.FindStringSubmatch(body)
+	if match == nil {
 		return "", false
 	}
 
-	path := matches[1]
+	path := match[1]
+	path = html.UnescapeString(path)
 
-	if strings.HasPrefix(path, "/") {
-		return origin + path, true
+	return origin + path, true
+}
+
+func ExtractAkamaiWebSBSDURL(origin, body string) (string, bool) {
+	match := akamaiWebSbsdScriptPathRegex.FindStringSubmatch(body)
+	if match == nil {
+		return "", false
 	}
 
-	return matches[1], true
+	path := match[1]
+	path = html.UnescapeString(path)
+
+	return origin + path, true
+}
+
+type SBSDHint int
+
+const (
+	SBSDHintNone SBSDHint = iota
+	SBSDHintChallenge
+	SBSDHintNonChallenge
+)
+
+type AkamaiWebGuidance struct {
+	SBSDHint      SBSDHint
+	SBSDV         string
+	SBSDT         int
+	SBSDPostURL   string
+	SBSDScriptURL string
+
+	V3ScriptURL string
+}
+
+// Automatically detect presence of SBSD challenge and parse SBSD/V3 params
+// Useful to handle cases where website doesn't always return SBSD challenge
+func ExtractAkamaiWebGuidance(origin, body string) (AkamaiWebGuidance, bool) {
+	var guidance AkamaiWebGuidance
+	var ok bool
+
+	guidance.V3ScriptURL, ok = ExtractAkamaiWebV3URL(origin, body)
+	if !ok {
+		return guidance, false
+	}
+
+	guidance.SBSDScriptURL, ok = ExtractAkamaiWebSBSDURL(origin, body)
+	if ok {
+
+	}
+
+	return guidance, true
 }
 
 // AkamaiWebV3Session maintains the state required for a coherent
@@ -33,35 +81,35 @@ type AkamaiWebV3Session struct {
 	client *Client
 	mu     sync.Mutex
 
-	userAgent string
-	scriptURL string
-	script    string
-	language  string
-	ip        string
+	userAgent   string
+	scriptURL   string
+	scriptBytes []byte
+	language    string
+	ip          string
 
-	state string
+	session string
 }
 
 type akamaiWebV3SessionBuilder struct {
 	client *Client
 
-	userAgent string
-	scriptURL string
-	script    string
-	language  string
-	ip        string
+	userAgent   string
+	scriptURL   string
+	scriptBytes []byte
+	language    string
+	ip          string
 }
 
 // AkamaiWebV3Session returns a builder for a new Akamai Web V3 session. It
 // does not make an API request and therefore does not accept a context. Complete
 // the builder with Create().
-func (c *Client) AkamaiWebV3Session(userAgent, scriptURL, script, language string) akamaiWebV3SessionBuilder {
+func (c *Client) AkamaiWebV3Session(userAgent, scriptURL string, scriptBytes []byte, language string) akamaiWebV3SessionBuilder {
 	return akamaiWebV3SessionBuilder{
-		client:    c,
-		userAgent: userAgent,
-		scriptURL: scriptURL,
-		script:    script,
-		language:  language,
+		client:      c,
+		userAgent:   userAgent,
+		scriptURL:   scriptURL,
+		scriptBytes: scriptBytes,
+		language:    language,
 	}
 }
 
@@ -73,12 +121,12 @@ func (b akamaiWebV3SessionBuilder) WithIP(ip string) akamaiWebV3SessionBuilder {
 
 func (b akamaiWebV3SessionBuilder) Create() *AkamaiWebV3Session {
 	return &AkamaiWebV3Session{
-		client:    b.client,
-		userAgent: b.userAgent,
-		scriptURL: b.scriptURL,
-		script:    b.script,
-		language:  b.language,
-		ip:        b.ip,
+		client:      b.client,
+		userAgent:   b.userAgent,
+		scriptURL:   b.scriptURL,
+		scriptBytes: b.scriptBytes,
+		language:    b.language,
+		ip:          b.ip,
 	}
 }
 
@@ -89,15 +137,15 @@ func (s *AkamaiWebV3Session) Sensor(ctx context.Context, pageURL, abck, bmsz str
 	defer s.mu.Unlock()
 
 	request := struct {
-		PageURL   string `json:"pageUrl"`
-		ScriptURL string `json:"scriptUrl"`
-		Script    string `json:"script,omitempty"`
-		BMSZ      string `json:"bmsz"`
-		ABCK      string `json:"abck"`
-		Language  string `json:"language"`
-		UserAgent string `json:"userAgent"`
-		IP        string `json:"ip,omitempty"`
-		Session   string `json:"session,omitempty"`
+		PageURL      string `json:"pageUrl"`
+		ScriptURL    string `json:"scriptUrl"`
+		ScriptBase64 string `json:"scriptBase64,omitempty"`
+		BMSZ         string `json:"bmsz"`
+		ABCK         string `json:"abck"`
+		Language     string `json:"language"`
+		UserAgent    string `json:"userAgent"`
+		IP           string `json:"ip,omitempty"`
+		Session      string `json:"session,omitempty"`
 	}{
 		PageURL:   pageURL,
 		ScriptURL: s.scriptURL,
@@ -106,11 +154,11 @@ func (s *AkamaiWebV3Session) Sensor(ctx context.Context, pageURL, abck, bmsz str
 		Language:  s.language,
 		UserAgent: s.userAgent,
 		IP:        s.ip,
-		Session:   s.state,
+		Session:   s.session,
 	}
 
-	if s.state == "" {
-		request.Script = s.script
+	if s.session == "" {
+		request.ScriptBase64 = base64.StdEncoding.EncodeToString(s.scriptBytes)
 	}
 
 	var response struct {
@@ -123,7 +171,7 @@ func (s *AkamaiWebV3Session) Sensor(ctx context.Context, pageURL, abck, bmsz str
 		return "", "", err
 	}
 
-	s.state = response.Session
+	s.session = response.Session
 
 	return response.Sensor, response.ReportData, nil
 }

@@ -2,6 +2,7 @@ package veris
 
 import (
 	"context"
+	"encoding/base64"
 	"sync"
 )
 
@@ -12,42 +13,42 @@ type AkamaiWebSBSDSession struct {
 	client *Client
 	mu     sync.Mutex
 
-	userAgent string
-	scriptURL string
-	script    string
-	language  string
+	userAgent   string
+	scriptURL   string
+	scriptBytes []byte
+	language    string
 
-	state string
+	session string
 }
 
 type akamaiWebSBSDSessionBuilder struct {
 	client *Client
 
-	userAgent string
-	scriptURL string
-	script    string
-	language  string
+	userAgent   string
+	scriptURL   string
+	scriptBytes []byte
+	language    string
 }
 
 // AkamaiWebSBSDSession returns a builder for a new Akamai Web SBSD session.
 // Complete the builder with Create().
-func (c *Client) AkamaiWebSBSDSession(userAgent, scriptURL, script, language string) akamaiWebSBSDSessionBuilder {
+func (c *Client) AkamaiWebSBSDSession(userAgent, scriptURL string, scriptBytes []byte, language string) akamaiWebSBSDSessionBuilder {
 	return akamaiWebSBSDSessionBuilder{
-		client:    c,
-		userAgent: userAgent,
-		scriptURL: scriptURL,
-		script:    script,
-		language:  language,
+		client:      c,
+		userAgent:   userAgent,
+		scriptURL:   scriptURL,
+		scriptBytes: scriptBytes,
+		language:    language,
 	}
 }
 
 func (b akamaiWebSBSDSessionBuilder) Create() *AkamaiWebSBSDSession {
 	return &AkamaiWebSBSDSession{
-		client:    b.client,
-		userAgent: b.userAgent,
-		scriptURL: b.scriptURL,
-		script:    b.script,
-		language:  b.language,
+		client:      b.client,
+		userAgent:   b.userAgent,
+		scriptURL:   b.scriptURL,
+		scriptBytes: b.scriptBytes,
+		language:    b.language,
 	}
 }
 
@@ -57,24 +58,25 @@ func (s *AkamaiWebSBSDSession) Sensor(ctx context.Context, pageURL, cookie strin
 	defer s.mu.Unlock()
 
 	request := struct {
-		PageURL   string `json:"pageUrl"`
-		ScriptURL string `json:"scriptUrl"`
-		Script    string `json:"script,omitempty"`
-		Cookie    string `json:"cookie"`
-		Language  string `json:"language"`
-		UserAgent string `json:"userAgent"`
-		Session   string `json:"session,omitempty"`
+		PageURL      string `json:"pageUrl"`
+		ScriptURL    string `json:"scriptUrl"`
+		ScriptBase64 string `json:"scriptBase64,omitempty"`
+		Cookie       string `json:"cookie"`
+		Language     string `json:"language"`
+		UserAgent    string `json:"userAgent"`
+		Session      string `json:"session,omitempty"`
 	}{
-		PageURL:   pageURL,
-		ScriptURL: s.scriptURL,
-		Cookie:    cookie,
-		Language:  s.language,
-		UserAgent: s.userAgent,
-		Session:   s.state,
+		PageURL:      pageURL,
+		ScriptURL:    s.scriptURL,
+		ScriptBase64: base64.StdEncoding.EncodeToString(s.scriptBytes),
+		Cookie:       cookie,
+		Language:     s.language,
+		UserAgent:    s.userAgent,
+		Session:      s.session,
 	}
 
-	if s.state == "" {
-		request.Script = s.script
+	if s.session == "" {
+		request.ScriptBase64 = base64.StdEncoding.EncodeToString(s.scriptBytes)
 	}
 
 	var response struct {
@@ -87,7 +89,7 @@ func (s *AkamaiWebSBSDSession) Sensor(ctx context.Context, pageURL, cookie strin
 		return "", "", err
 	}
 
-	s.state = response.Session
+	s.session = response.Session
 
 	return response.Sensor, response.ReportData, nil
 }

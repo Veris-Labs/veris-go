@@ -2,6 +2,7 @@ package veris
 
 import (
 	"context"
+	"encoding/base64"
 	"net/url"
 	"sync"
 )
@@ -163,9 +164,11 @@ func (s *AkamaiBMPIOSSession) IOSVersion() string {
 // akamaiBMPIOSSensorBuilder configures optional challenge data for one sensor
 // generation.
 type akamaiBMPIOSSensorBuilder struct {
-	session   *AkamaiBMPIOSSession
-	params    string
-	dciScript string
+	session        *AkamaiBMPIOSSession
+	paramsBytes    []byte
+	dciScriptBytes []byte
+
+	extra map[string]any
 }
 
 // Sensor returns a builder for one sensor generation.
@@ -178,14 +181,24 @@ func (s *AkamaiBMPIOSSession) Sensor() akamaiBMPIOSSensorBuilder {
 
 // WithParams supplies the JSON response from Akamai's /_bm/get_params endpoint
 // as a string
-func (b akamaiBMPIOSSensorBuilder) WithParams(params string) akamaiBMPIOSSensorBuilder {
-	b.params = params
+func (b akamaiBMPIOSSensorBuilder) WithParamsBytes(paramsBytes []byte) akamaiBMPIOSSensorBuilder {
+	b.paramsBytes = paramsBytes
 	return b
 }
 
 // WithDCIScript supplies the DCI JavaScript source as a string
-func (b akamaiBMPIOSSensorBuilder) WithDCIScript(script string) akamaiBMPIOSSensorBuilder {
-	b.dciScript = script
+func (b akamaiBMPIOSSensorBuilder) WithDCIScriptBytes(scriptBytes []byte) akamaiBMPIOSSensorBuilder {
+	b.dciScriptBytes = scriptBytes
+	return b
+}
+
+func (b akamaiBMPIOSSensorBuilder) WithExtra(key string, value any) akamaiBMPIOSSensorBuilder {
+	if b.extra == nil {
+		b.extra = make(map[string]any)
+	}
+
+	b.extra[key] = value
+
 	return b
 }
 
@@ -194,22 +207,18 @@ func (b akamaiBMPIOSSensorBuilder) Generate(ctx context.Context) (string, Report
 	b.session.mu.Lock()
 	defer b.session.mu.Unlock()
 
-	request := struct {
-		BMPVersion string `json:"bmpVersion"`
-		AppPackage string `json:"appPackage"`
-		AppVersion string `json:"appVersion"`
-		Language   string `json:"language,omitempty"`
-		DCIScript  string `json:"dciScript,omitempty"`
-		Params     string `json:"params,omitempty"`
-		Session    string `json:"session"`
-	}{
-		BMPVersion: b.session.bmpVersion,
-		AppPackage: b.session.appPackage,
-		AppVersion: b.session.appVersion,
-		Language:   b.session.language,
-		DCIScript:  b.dciScript,
-		Params:     b.params,
-		Session:    b.session.state,
+	request := map[string]any{
+		"bmpVersion":      b.session.bmpVersion,
+		"appPackage":      b.session.appPackage,
+		"appVersion":      b.session.appVersion,
+		"language":        b.session.language,
+		"dciScriptBase64": base64.StdEncoding.EncodeToString(b.dciScriptBytes),
+		"paramsBase64":    base64.StdEncoding.EncodeToString(b.paramsBytes),
+		"session":         b.session.state,
+	}
+
+	for k, v := range b.extra {
+		request[k] = v
 	}
 
 	var response struct {
