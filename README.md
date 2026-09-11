@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/verislabs.ico" width="75" height="75" alt="Veris Labs Logo" align="middle" />
+  <img src="./assets/favicon-rounded-1000x1000.png" width="75" height="75" alt="Veris Labs Logo" align="middle" />
   <img height="50" src="https://readme-typing-svg.herokuapp.com?font=Inter&weight=700&size=36&color=FFFFFF&center=true&vCenter=true&width=220&lines=verislabs.io&repeat=false&duration=2500" align="middle" />
 </p>
 
